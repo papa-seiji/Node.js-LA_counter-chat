@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Socket.io Counter and Chat</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://unpkg.com/swiper/swiper-bundle.min.css"><!-- Swiper CSS -->
+    <script src="https://unpkg.com/swiper/swiper-bundle.min.js"></script><!-- Swiper JS -->
+</head>
+<body>
+    <div id="container">
+        <div id="counter-container">
+            <h1>HR: <span id="HomeRunCounter">0</span>号</h1>
+            <button id="incrementBtn">↑</button>
+            <button id="decrementBtn">↓</button>
+            <img class="dekopin-image" src="img\Dekopin3.jpg" alt="">
+        </div>
+        
+        <!-- スライダーのコンテナ -->
+        <div class="swiper-container">
+            <!-- 追加する画像を表示するスライダーのラッパー -->
+            <div class="swiper-wrapper">
+                <!-- 画像の各スライド -->
+                <div class="swiper-slide"><img src="img\ダルビッシュ有vs翔平.jpg" alt="Image 1"></div>
+                <div class="swiper-slide"><img src="img\swing.jpg" alt="Image 2"></div>
+                <div class="swiper-slide"><img src="img\NB_rogo.jpg" alt="Image 3"></div>
+                <div class="swiper-slide"><img src="img\head_touch.jpg" alt="Image 4"></div>
+                <div class="swiper-slide"><img src="img\dodgerstudium.jpg" alt="Image 5"></div>
+                <div class="swiper-slide"><img src="img\06_Dodgers_大谷翔平.jpg" alt="Image 6"></div>
+                <div class="swiper-slide"><img src="img\07_Dodgers_大谷翔平.jpg" alt="Image 7"></div>
+                <!-- 他の画像を追加 -->
+            </div>
+        </div>
+        <hr>
+        <div id="messages-container">
+            <ul id="messages">
+                <li>
+                    <!-- <img class="message-image" src="img\07_Dodgers_大谷翔平.jpg" alt="Image 7"> -->
+                    <div class="message-text"></div>
+                </li>
+                <!-- 他のメッセージも同様に追加 -->
+            </ul>
+        </div>
+        <form id="message-form" enctype="multipart/form-data">
+        <!-- <form action="" enctype="multipart/form-data">     -->
+            <input id="m" type="text" placeholder="Message..." autocomplete="off" />
+            <!-- マスクされたファイル入力の代わりのカスタムボタン -->
+            <div id="fileInputContainer">
+                <label class="custom-file-label" for="fileInput"></label>
+                <input id="fileInput" type="file" class="custom-file-input" accept="image/*">
+            </div>
+            <button type="submit">Send</button>
+        </form>
+    </div>
+    <script>
+        const socket = io();
+
+        // サーバーからのカウンターの値を受信して更新する
+        socket.on('counter', (count) => {
+            $('#HomeRunCounter').text(count);
+        });
+
+        // サーバーからのチャットメッセージを受信して表示する
+        socket.on('chat message', (data) => {
+            const now = new Date();
+            const tokyoTime = new Date(now.getTime() + (9 * 60 * 60 * 1000)); // 日本時間に変換
+            const year = String(tokyoTime.getFullYear()).slice(-2);
+            const month = String(tokyoTime.getMonth() + 1).padStart(2, '0');
+            const day = String(tokyoTime.getDate()).padStart(2, '0');
+            const hours = String(tokyoTime.getHours()).padStart(2, '0');
+            const minutes = String(tokyoTime.getMinutes()).padStart(2, '0');
+            const timestamp = `${year}/${month}/${day}-${hours}:${minutes}`;
+
+            // メッセージと画像をリストアイテムとして追加
+            const $li = $('<li>').addClass('message-item');
+            const $message = $('<span>').text(`[${timestamp}] ${data.message}`).addClass('message-text');
+            $li.append($message);
+
+            // 画像がある場合は画像を追加
+            if (data.image) {
+                const $image = $('<img>').attr('src', data.image).addClass('message-image');
+                $li.append($image);
+            }
+
+            // 自分のメッセージと他人のメッセージを区別して表示
+            if (data.sender === 'self') {
+                $li.addClass('self-message');
+            } else {
+                $li.addClass('other-message');
+            }
+
+            $('#messages').append($li);
+
+            // スクロールバーを一番下に移動する
+            $('#messages-container').scrollTop($('#messages-container')[0].scrollHeight);
+        });
+
+        // ローカルストレージからチャットメッセージを取得して表示する
+        $(document).ready(() => {
+            const storedMessages = JSON.parse(localStorage.getItem('chatMessages')) || [];
+            storedMessages.forEach(message => {
+                const $li = $('<li>').addClass('message-item');
+                const $message = $('<span>').text(message).addClass('message-text');
+                $li.append($message);
+                $('#messages').append($li);
+            });
+        });
+
+        // カウンターを増加させる
+        $('#incrementBtn').click(() => {
+            socket.emit('increment');
+        });
+
+        // カウンターを減少させる
+        $('#decrementBtn').click(() => {
+            socket.emit('decrement');
+        });
+
+        // メッセージ送信フォームが送信されたときにメッセージをサーバーに送信する
+        $('#message-form').submit((e) => {
+            e.preventDefault();
+            const msg = $('#m').val();
+            socket.emit('chat message', msg);
+            $('#m').val('');
+            // 送信されたメッセージをローカルストレージに保存する
+            const storedMessages = JSON.parse(localStorage.getItem('chatMessages')) || [];
+            storedMessages.push(msg);
+            localStorage.setItem('chatMessages', JSON.stringify(storedMessages));
+
+            return false;
+        });
+        
+
+        // ファイル入力のラベルを更新する
+        $('#fileInput').change(function() {
+            const fileName = $(this).val().split('\\').pop();
+            $('.custom-file-label').text(fileName);
+        });
+
+		// Swiperを初期化
+        const mySwiper = new Swiper('.swiper-container', {
+            // オプションを指定
+            loop: true, // ループする
+            slidesPerView: 3, // スライドの表示数を自動調整
+            spaceBetween: 1, // スライド間のスペース
+            speed: 10000,
+            allowTouchMove: false,
+            loopedSlides: 2,
+            autoplay: {
+                delay: 0, // 自動再生の間隔（ミリ秒）
+            },
+        });
+
+    </script>
+</body>
+</html>
